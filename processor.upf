@@ -1,0 +1,62 @@
+# processor.upf
+set_design_top processor
+set_scope .
+
+# Create Power Domains
+create_power_domain PD_CORE -elements {mewb1 ifid1 alu1 dec1 cp0}
+create_power_domain PD_TOP -include_scope
+
+# Define Power Supplies
+create_supply_port VDD 
+create_supply_port VSS
+
+# Power switch nets.
+create_supply_net VDD_CORE_OUT 
+
+# Connect Supplies to Domains
+create_supply_net VDD 
+create_supply_net VSS 
+
+
+set_domain_supply_net PD_TOP \
+    -primary_power_net VDD \
+    -primary_ground_net VSS
+
+set_domain_supply_net PD_CORE \
+    -primary_power_net VDD_CORE_OUT \
+    -primary_ground_net VSS
+
+
+connect_supply_net VDD -ports {VDD}
+connect_supply_net VSS -ports {VSS}
+
+
+set_level_shifter LS_CORE \
+  -domain PD_CORE \
+  -applies_to outputs \
+  -rule low_to_high \
+  -location parent
+
+use_interface_cell lvls4 -strategy LS_CORE -domain PD_CORE -lib_cells {LS_HLEN_X1 LS_HL_X1 LS_LHEN_X1 LS_LH_X1 LS_HLEN_X2 LS_HL_X2 LS_LHEN_X2 LS_LH_X2 LS_HLEN_X4 LS_HL_X4 LS_LHEN_X4 LS_LH_X4}
+
+set_isolation ISO_CORE -domain PD_CORE -applies_to outputs -clamp_value 1 -isolation_power_net VDD -isolation_ground_net VSS -elements {alu1 dec1}
+
+set_isolation_control ISO_CORE -domain PD_CORE -isolation_signal rst_n -isolation_sense high -location self
+
+use_interface_cell isolation1 -strategy ISO_CORE -domain PD_CORE -lib_cells {ISO_FENCE0N_X1 ISO_FENCE0_X1 ISO_FENCE1N_X1 ISO_FENCE1_X1 ISO_FENCE0N_X2 ISO_FENCE0_X2 ISO_FENCE1N_X2 ISO_FENCE1_X2 ISO_FENCE0N_X4 ISO_FENCE0_X4 ISO_FENCE1N_X4 ISO_FENCE1_X4}
+
+# Power switch for PD_CORE domain
+create_power_switch SW_CORE -domain PD_CORE -output_supply_port {V1 VDD_CORE_OUT} -input_supply_port {V2 VDD} -control_port {ms_sel pwr_sig} -on_state {normal_working V2 {ms_sel}} -off_state {off_state {!ms_sel}} 
+
+map_power_switch SW_CORE -domain PD_CORE -lib_cells {HEADER_OE_X1 HEADER_OE_X2 HEADER_OE_X4 HEADER_X1 HEADER_X2 HEADER_X4}
+
+add_port_state VDD -state {ON 0.95}
+add_port_state SW_CORE/V1 -state {ON 0.95} -state {OFF 0.00}
+
+
+
+# POWER STATE TABLE
+create_pst PST -supplies {VDD VDD_CORE_OUT}
+add_pst_state PS1 -pst PST -state {ON OFF}
+add_pst_state PS2 -pst PST -state {ON ON}
+
